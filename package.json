@@ -1,0 +1,21 @@
+{
+  "name": "ionos-media-gallery",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "lowdb": "^6.1.1",
+    "node-cron": "^3.0.3",
+    "ssh2-sftp-client": "^9.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+}

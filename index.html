@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IONOS Media Gallery (Test)</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; padding:16px; }
+    .folder { margin-right:8px; padding:8px 12px; border:1px solid #ddd; display:inline-block; cursor:pointer; }
+    .file { border-bottom:1px solid #eee; padding:8px 0; display:flex; justify-content:space-between; align-items:center; }
+    .controls { margin:12px 0; }
+    .selected { background:#f0f8ff; }
+  </style>
+</head>
+<body>
+  <h2>IONOS Media Gallery — Test</h2>
+
+  <div id="pinBox">
+    <p>Enter PIN to continue</p>
+    <input id="pin" placeholder="PIN" />
+    <button id="pinBtn">Submit</button>
+    <div id="pinMsg"></div>
+  </div>
+
+  <div id="app" style="display:none">
+    <div class="controls">
+      <span class="folder" data-name="Unrestricted">Unrestricted</span>
+      <span class="folder" data-name="Restricted">Restricted</span>
+      <span class="folder" data-name="DM">DM</span>
+      <span class="folder" data-name="recycle-bin">Recycle Bin</span>
+    </div>
+
+    <div>
+      <label>Filter:
+        <select id="filterType">
+          <option value="all">All</option>
+          <option value="images">Images</option>
+          <option value="video">Video</option>
+        </select>
+      </label>
+      <label>Sort:
+        <select id="sortBy">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="small">Small</option>
+          <option value="large">Large</option>
+        </select>
+      </label>
+      <label>Search Date: <input id="searchDate" type="date"/></label>
+      <button id="refreshBtn">Refresh</button>
+      <button id="downloadSel">Download Selected (zip not implemented)</button>
+      <button id="deleteSel">Move Selected to Recycle</button>
+    </div>
+
+    <h3 id="folderTitle"></h3>
+    <div id="files"></div>
+  </div>
+
+<script>
+async function postJSON(url,data){ const r=await fetch(url,{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); return r.json(); }
+async function getJSON(url){ const r=await fetch(url); if(!r.ok) throw await r.json(); return r.json(); }
+
+document.getElementById('pinBtn').onclick = async () => {
+  const pin = document.getElementById('pin').value;
+  try {
+    const res = await postJSON('/api/pin', { pin });
+    if (res.ok) {
+      document.getElementById('pinBox').style.display='none';
+      document.getElementById('app').style.display='block';
+      loadFolder('Unrestricted');
+    } else {
+      document.getElementById('pinMsg').innerText='Wrong PIN';
+    }
+  } catch(e){ document.getElementById('pinMsg').innerText='Error'; }
+};
+
+let currentFolder = 'Unrestricted';
+const selected = new Set();
+
+document.querySelectorAll('.folder').forEach(el=>{
+  el.addEventListener('click', ()=> loadFolder(el.dataset.name));
+});
+
+document.getElementById('refreshBtn').addEventListener('click', ()=> loadFolder(currentFolder));
+document.getElementById('deleteSel').addEventListener('click', async ()=>{
+  if (selected.size===0) return alert('select files first');
+  const paths = Array.from(selected);
+  const body = { paths };
+  await postJSON('/api/delete', body);
+  selected.clear();
+  loadFolder(currentFolder);
+});
+
+document.getElementById('downloadSel').addEventListener('click', async ()=>{
+  if (selected.size===0) return alert('select files first');
+  // simple: open each file download in new tab
+  for (const p of selected) {
+    window.open(`/api/download?path=${encodeURIComponent(p)}`);
+  }
+});
+
+async function loadFolder(folder) {
+  currentFolder = folder;
+  document.getElementById('folderTitle').innerText = 'Folder: ' + folder;
+  const res = await getJSON('/api/folder/' + folder);
+  let files = res.files || [];
+  // apply filters
+  const ftype = document.getElementById('filterType').value;
+  const dateVal = document.getElementById('searchDate').value;
+  if (ftype === 'images') files = files.filter(f => /\.(jpe?g|png|gif)$/i.test(f.name));
+  if (ftype === 'video') files = files.filter(f => /\.(mp4|mov|mkv|webm)$/i.test(f.name));
+  if (dateVal) {
+    files = files.filter(f => f.dateISO.startsWith(dateVal));
+  }
+  // sort
+  const sort = document.getElementById('sortBy').value;
+  files.sort((a,b)=>{
+    if (sort === 'newest') return b.modifyTime - a.modifyTime;
+    if (sort === 'oldest') return a.modifyTime - b.modifyTime;
+    if (sort === 'small') return a.size - b.size;
+    if (sort === 'large') return b.size - a.size;
+    return 0;
+  });
+
+  const out = document.getElementById('files');
+  out.innerHTML = '';
+  for (const f of files) {
+    const div = document.createElement('div');
+    div.className = 'file';
+    const left = document.createElement('div');
+    const checkbox = document.createElement('input');
+    checkbox.type='checkbox';
+    checkbox.addEventListener('change', (e)=>{
+      if (e.target.checked) selected.add(f.path); else selected.delete(f.path);
+    });
+    left.appendChild(checkbox);
+    left.appendChild(document.createTextNode(' ' + (f.favorite ? '★ ' : '') + f.displayName + ' — ' + (new Date(f.modifyTime*1000)).toLocaleString()));
+    const right = document.createElement('div');
+    const dl = document.createElement('button');
+    dl.innerText='Download';
+    dl.onclick = ()=> window.open(`/api/download?path=${encodeURIComponent(f.path)}`);
+    const fav = document.createElement('button');
+    fav.innerText = f.favorite ? 'Unfav' : 'Fav';
+    fav.onclick = async ()=>{
+      await postJSON('/api/favorite', { path: f.path, fav: !f.favorite });
+      loadFolder(currentFolder);
+    };
+    const renameBtn = document.createElement('button');
+    renameBtn.innerText='Rename';
+    renameBtn.onclick = async ()=>{
+      const newName = prompt('New display name', f.displayName || f.name);
+      if(newName) {
+        await postJSON('/api/rename', { path: f.path, newName });
+        loadFolder(currentFolder);
+      }
+    };
+    right.appendChild(dl); right.appendChild(fav); right.appendChild(renameBtn);
+    div.appendChild(left); div.appendChild(right);
+    out.appendChild(div);
+  }
+}
+</script>
+</body>
+</html>
