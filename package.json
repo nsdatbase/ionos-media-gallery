@@ -1,21 +1,20 @@
 {
   "name": "ionos-media-gallery",
   "version": "1.0.0",
+  "description": "IONOS Web Gallery Manager with SFTP media access, PIN protection, and auto-clean recycle bin.",
   "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "busboy": "^1.6.0",
+    "express": "^4.19.2",
+    "dotenv": "^16.4.5",
     "cookie-parser": "^1.4.7",
-    "dotenv": "^16.6.1",
-    "express": "^4.21.2",
-    "lowdb": "^6.1.1",
-    "node-cron": "^3.0.3",
-    "ssh2-sftp-client": "^9.1.0"
+    "ssh2-sftp-client": "^11.1.0",
+    "lowdb": "^6.0.1",
+    "node-cron": "^3.0.3"
   },
-  "devDependencies": {
-    "nodemon": "^2.0.22"
-  }
+  "author": "nsdatbase",
+  "license": "ISC"
 }
